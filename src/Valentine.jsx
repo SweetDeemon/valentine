@@ -1,308 +1,408 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState, useRef } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 export default function Valentine({ audioRef }) {
+
+    const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+    const [videoEnded, setVideoEnded] = useState(false);
+  
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const photos = Array.from(
-    { length: 10 },
+    { length: 14 },
     (_, i) => `/photos/foto${i + 1}.jpg`
   );
 
+  const [stage, setStage] = useState("game");
   const [activeIndex, setActiveIndex] = useState(0);
-  const [previewIndex, setPreviewIndex] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [heroFade, setHeroFade] = useState(false);
+  const [noText, setNoText] = useState("Tidak 🙈");
+  
+  const galleryRef = useRef(null);
 
-  const canvasRef = useRef(null);
-  const videoRef = useRef(null);
-  const startX = useRef(0);
-  const animationRef = useRef(null);
-
-  /* ================= BODY LOCK ================= */
+  /* ================= ENTRY CONTROL ================= */
   useEffect(() => {
-    document.body.style.overflow =
-      previewIndex !== null ? "hidden" : "auto";
-  }, [previewIndex]);
+    if (location.state?.fromForever) {
+      setStage("main");
 
-  /* ================= CANVAS GLITTER ================= */
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+      setTimeout(() => {
+        galleryRef.current?.scrollIntoView({
+          behavior: "smooth",
+        });
+      }, 600);
 
-    let width = window.innerWidth;
-    let height = window.innerHeight;
-
-    canvas.width = width;
-    canvas.height = height;
-
-    const particles = Array.from({ length: 60 }).map(() => ({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      r: Math.random() * 1.2 + 0.5,
-      speed: Math.random() * 0.4 + 0.2,
-      opacity: Math.random() * 0.6 + 0.3,
-    }));
-
-    function animate() {
-      ctx.clearRect(0, 0, width, height);
-
-      particles.forEach((p) => {
-        p.y -= p.speed;
-        if (p.y < 0) p.y = height;
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${p.opacity})`;
-        ctx.shadowBlur = 6;
-        ctx.shadowColor = "white";
-        ctx.fill();
-      });
-
-      animationRef.current = requestAnimationFrame(animate);
+      // Reset router state supaya tidak kebawa refresh
+      navigate("/", { replace: true, state: null });
+    } else {
+      setStage("game");
     }
-
-    animate();
-
-    const resize = () => {
-      width = window.innerWidth;
-      height = window.innerHeight;
-      canvas.width = width;
-      canvas.height = height;
-    };
-
-    window.addEventListener("resize", resize);
-
-    return () => {
-      cancelAnimationFrame(animationRef.current);
-      window.removeEventListener("resize", resize);
-    };
   }, []);
 
   /* ================= AUTO SLIDE ================= */
   useEffect(() => {
-    if (previewIndex !== null) return;
+    if (stage !== "main" || isPaused) return;
 
     const interval = setInterval(() => {
       setActiveIndex((prev) => (prev + 1) % photos.length);
-    }, 5000);
+    }, 4000);
 
     return () => clearInterval(interval);
-  }, [previewIndex]);
+  }, [stage, isPaused, photos.length]);
 
-  /* ================= MUSIC ================= */
-  const toggleMusic = async () => {
-    if (!audioRef?.current) return;
+  /* ================= HERO → GALLERY ================= */
+  useEffect(() => {
+    if (stage === "main" && !location.state?.fromForever) {
 
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
+      const fadeTimer = setTimeout(() => {
+        setHeroFade(true);
+      }, 1800);
+
+      const scrollTimer = setTimeout(() => {
+        galleryRef.current?.scrollIntoView({
+          behavior: "smooth",
+        });
+      }, 2200);
+
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(scrollTimer);
+      };
+    }
+  }, [stage]);
+
+  /* ================= YES ================= */
+  const handleYes = async () => {
+    setStage("popup1");
+
+    if (audioRef?.current) {
       try {
+        audioRef.current.volume = 0;
         await audioRef.current.play();
-        setIsPlaying(true);
+
+        let vol = 0;
+        const fade = setInterval(() => {
+          vol += 0.05;
+          if (vol >= 0.6) {
+            vol = 0.6;
+            clearInterval(fade);
+          }
+          audioRef.current.volume = vol;
+        }, 150);
       } catch {}
     }
+
+    setTimeout(() => setStage("popup2"), 2000);
+    setTimeout(() => setStage("main"), 4000);
   };
 
-  /* ================= VIDEO SYNC ================= */
+  /* ================= NO (FUNNY TEXT) ================= */
+  const handleNo = () => {
+    const texts = [
+      "Yakin? 🥺",
+      "Masa sih? 😭",
+      "Aku sedih loh 😢",
+      "Coba klik iya aja 🤍",
+      "Jangan gitu dong 🙈"
+    ];
+
+    setNoText(texts[Math.floor(Math.random() * texts.length)]);
+  };
+
   const handleVideoPlay = () => {
-    if (audioRef?.current && isPlaying) {
-      audioRef.current.pause();
-    }
+    audioRef?.current?.pause();
   };
 
   const handleVideoPause = () => {
-    if (audioRef?.current && isPlaying) {
-      audioRef.current.play();
-    }
-  };
-
-  /* ================= SWIPE ================= */
-  const handleTouchStart = (e) => {
-    startX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchEnd = (e) => {
-    const diff = startX.current - e.changedTouches[0].clientX;
-    if (Math.abs(diff) < 50) return;
-
-    if (diff > 0) {
-      setPreviewIndex((prev) =>
-        prev === photos.length - 1 ? 0 : prev + 1
-      );
-    } else {
-      setPreviewIndex((prev) =>
-        prev === 0 ? photos.length - 1 : prev - 1
-      );
-    }
+    audioRef?.current?.play().catch(() => {});
   };
 
   return (
     <div className="relative min-h-screen text-white overflow-x-hidden">
 
-      {/* BACKGROUND */}
-      <div className="fixed inset-0 -z-50 bg-gradient-to-br from-rose-300 via-pink-400 to-fuchsia-500" />
-      <canvas ref={canvasRef} className="fixed inset-0 -z-40 pointer-events-none" />
+      {/* Background */}
+      <div className="fixed inset-0 -z-50 bg-gradient-to-br from-rose-500 via-pink-600 to-fuchsia-700" />
 
-      {/* MUSIC BUTTON */}
-      <button
-        onClick={toggleMusic}
-        className="fixed top-6 right-6 z-50
-                   w-14 h-14 rounded-full
-                   bg-white/20 backdrop-blur-xl border border-white/40
-                   shadow-[0_0_25px_rgba(255,255,255,0.7)]
-                   flex items-center justify-center text-xl"
-      >
-        {isPlaying ? "🎵" : "🎶"}
-      </button>
+      {/* ================= MINI GAME ================= */}
+      <AnimatePresence>
+        {stage === "game" && (
+          <motion.section
+            key="game"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="min-h-screen flex items-center justify-center"
+          >
+            <div className="bg-white/10 backdrop-blur-xl p-14 rounded-3xl text-center shadow-xl border border-white/20">
+              <h1 className="text-4xl font-bold mb-10 bg-gradient-to-r from-white via-rose-100 to-pink-200 bg-clip-text text-transparent">
+                Kamu Sayang Aku Ga? 🤍
+              </h1>
 
-      {/* HERO */}
-      <section className="min-h-screen flex flex-col items-center justify-center text-center px-6">
-        <h1 className="text-5xl sm:text-8xl font-extrabold
-                       bg-gradient-to-r from-white via-pink-100 to-rose-200
-                       bg-clip-text text-transparent">
-          Happy Valentine ❤️
-        </h1>
-        <p className="mt-8 text-lg sm:text-2xl max-w-xl">
-          With you, every moment feels like magic.
-        </p>
-      </section>
+              <div className="flex justify-center gap-8">
+                <button
+                  onClick={handleYes}
+                  className="px-10 py-4 bg-white text-rose-600 rounded-full font-bold shadow-lg"
+                >
+                  Iya 🤍
+                </button>
 
-      {/* OUR JOURNEY */}
-      <section className="py-32 text-center px-6">
-        <h2 className="text-5xl sm:text-6xl font-semibold text-pink-100 mb-20">
-          Our Journey
-        </h2>
+                <button
+                  onClick={handleNo}
+                  className="px-10 py-4 bg-rose-800 text-white rounded-full font-bold shadow-lg"
+                >
+                  {noText}
+                </button>
+              </div>
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
 
-        <div
-          onClick={() => setPreviewIndex(activeIndex)}
-          className="mx-auto max-w-5xl aspect-[16/9]
-                     rounded-[40px] overflow-hidden
-                     shadow-[0_0_120px_rgba(255,182,193,0.6)]
-                     cursor-pointer"
-        >
-          <AnimatePresence mode="wait">
-            <motion.img
-              key={activeIndex}
-              src={photos[activeIndex]}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.8 }}
-              className="w-full h-full object-cover"
-            />
-          </AnimatePresence>
-        </div>
-
-        {/* MINI THUMB */}
-        <div className="flex gap-6 overflow-x-auto py-14 mt-10 px-6">
-          {photos.map((photo, index) => (
+      {/* ================= POPUPS ================= */}
+      <AnimatePresence>
+        {(stage === "popup1" || stage === "popup2") && (
+          <motion.div
+            key={stage}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-xl flex items-center justify-center z-50"
+          >
             <motion.div
-              key={index}
-              onClick={() => setActiveIndex(index)}
-              whileHover={{ scale: 1.15 }}
-              className={`flex-shrink-0 w-24 aspect-[3/5]
-                rounded-2xl overflow-hidden cursor-pointer transition-all
-                ${
-                  activeIndex === index
-                    ? "ring-4 ring-pink-300 scale-110"
-                    : "opacity-70 hover:opacity-100"
-                }`}
+              initial={{ scale: 0.7 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.7 }}
+              className="bg-white/20 backdrop-blur-2xl rounded-3xl px-14 py-12 text-center shadow-xl border border-white/30"
             >
-              <img src={photo} className="w-full h-full object-cover" />
+              <h2 className="text-3xl font-bold">
+                {stage === "popup1"
+                  ? "Aku juga sayang sama kamu 🤍"
+                  : "Happy Valentine Sayang 🤍"}
+              </h2>
             </motion.div>
-          ))}
-        </div>
-      </section>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* VIDEO */}
-      <section className="py-32 text-center px-6">
-        <h2 className="text-4xl sm:text-6xl font-semibold mb-14">
-          A Special Moment
-        </h2>
+      {/* ================= MAIN ================= */}
+      {stage === "main" && (
+        <>
+          <motion.section
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: heroFade ? 0 : 1,
+              scale: heroFade ? 1.05 : 1,
+            }}
+            transition={{ duration: 1.2 }}
+            className="min-h-screen flex items-center justify-center text-center px-6"
+          >
+            <h1 className="text-5xl sm:text-8xl font-bold bg-gradient-to-r from-white via-rose-100 to-pink-200 bg-clip-text text-transparent">
+              With you, forever feels real 🤍
+            </h1>
+          </motion.section>
 
-        <div className="relative max-w-md mx-auto rounded-3xl overflow-hidden
-                        shadow-[0_40px_120px_rgba(255,105,180,0.6)]
-                        backdrop-blur-xl border border-white/30">
-          <div className="aspect-[9/16] bg-black">
-            <video
-              ref={videoRef}
-              controls
-              playsInline
-              className="w-full h-full object-cover"
-              onPlay={handleVideoPlay}
-              onPause={handleVideoPause}
-            >
-              <source src="/videos/video1.mp4" type="video/mp4" />
-            </video>
-          </div>
-        </div>
-      </section>
+          {/* ================= MAGICAL OUR JOURNEY ================= */}
+<motion.section
+  ref={galleryRef}
+  initial={{ opacity: 0 }}
+  whileInView={{ opacity: 1 }}
+  transition={{ duration: 1 }}
+  viewport={{ once: true }}
+  className="py-32 text-center relative overflow-hidden"
+>
 
-      {/* ROMANTIC MESSAGE */}
-      <section className="py-32 px-6 text-center">
-        <div className="max-w-3xl mx-auto">
-          <h3 className="text-4xl sm:text-5xl font-semibold mb-10
-                         bg-gradient-to-r from-white via-pink-100 to-rose-200
-                         bg-clip-text text-transparent">
-            You Are My Forever
-          </h3>
+  {/* Ambient Glow */}
+  <motion.div
+    animate={{ opacity: [0.3, 0.6, 0.3] }}
+    transition={{ repeat: Infinity, duration: 6 }}
+    className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[600px] h-[600px] 
+               bg-white/20 blur-[160px] rounded-full -z-10"
+  />
 
-          <p className="text-lg sm:text-xl leading-relaxed text-pink-50">
-            In your presence, time feels softer and the world becomes quiet.
-            Every smile you give, every gentle touch, every laugh we share
-            feels like a promise written in the stars.
-            <br /><br />
-            Loving you is not just a moment —
-            it is a journey I would choose again and again.
-            Through every sunrise, every storm,
-            and every dream we build together,
-            my heart will always find its way back to you.
-          </p>
-        </div>
-      </section>
-
-{/* PREVIEW */}
-<AnimatePresence>
-  {previewIndex !== null && (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/95 z-[100]
-                 flex items-center justify-center
-                 px-4 py-10"
-      onClick={() => setPreviewIndex(null)}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+  {/* Floating Title */}
+  <motion.h2
+    initial={{ y: -40, opacity: 0 }}
+    whileInView={{ y: 0, opacity: 1 }}
+    transition={{ duration: 1 }}
+    viewport={{ once: true }}
+    className="text-4xl sm:text-6xl mb-20 text-rose-100"
+  >
+    <motion.span
+      animate={{ y: [0, -8, 0] }}
+      transition={{ repeat: Infinity, duration: 5 }}
+      className="inline-block"
     >
+      Our Journey ✨
+    </motion.span>
+  </motion.h2>
+
+  {/* MAIN IMAGE CINEMATIC CROSSFADE */}
+  <div className="relative mx-auto max-w-5xl">
+    <AnimatePresence mode="wait">
       <motion.img
-        key={previewIndex}
-        src={photos[previewIndex]}
-        initial={{ scale: 0.95 }}
-        animate={{ scale: 1 }}
-        exit={{ scale: 0.95 }}
-        transition={{ duration: 0.3 }}
-        className="max-h-[90vh] w-auto max-w-full
-                   object-contain rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
+        key={photos[activeIndex]}
+        src={photos[activeIndex]}
+        initial={{ opacity: 0, scale: 0.95, rotate: -1 }}
+        animate={{ opacity: 1, scale: 1, rotate: 0 }}
+        exit={{ opacity: 0, scale: 1.05 }}
+        transition={{ duration: 0.8 }}
+        className="w-auto max-w-full max-h-[75vh] object-contain 
+                   rounded-3xl shadow-[0_30px_120px_rgba(255,255,255,0.25)] mx-auto"
       />
-    </motion.div>
-  )}
-</AnimatePresence>
+    </AnimatePresence>
+  </div>
+
+  {/* THUMBNAILS POLAROID STYLE */}
+  <div className="mt-20 flex gap-6 overflow-x-auto px-6 justify-start">
+
+    {photos.map((photo, index) => (
+      <motion.div
+        key={index}
+        initial={{
+          opacity: 0,
+          y: 80,
+          rotate: Math.random() * 20 - 10
+        }}
+        whileInView={{
+          opacity: 1,
+          y: 0,
+          rotate: Math.random() * 4 - 2
+        }}
+        transition={{
+          duration: 0.8,
+          delay: index * 0.05
+        }}
+        viewport={{ once: true }}
+        whileHover={{
+          scale: 1.15,
+          rotate: 0,
+          boxShadow: "0px 20px 40px rgba(255,255,255,0.3)"
+        }}
+        onClick={() => {
+          setActiveIndex(index);
+          setIsPaused(true);
+          setTimeout(() => setIsPaused(false), 5000);
+        }}
+        className={`relative w-28 h-40 bg-white rounded-xl p-2 flex-shrink-0 cursor-pointer transition-all ${
+          activeIndex === index
+            ? "ring-4 ring-rose-300 scale-110"
+            : ""
+        }`}
+      >
+        <img
+          src={photo}
+          className="w-full h-full object-cover rounded-lg"
+          alt=""
+        />
+
+        {/* Soft floating effect */}
+        <motion.div
+          animate={{ y: [0, -6, 0] }}
+          transition={{ repeat: Infinity, duration: 4, delay: index * 0.2 }}
+          className="absolute inset-0 rounded-xl"
+        />
+      </motion.div>
+    ))}
+
+  </div>
+
+</motion.section>
 
 
-      {/* CTA */}
-      <section className="py-20 text-center">
-        <Link
-          to="/forever"
-          className="px-20 py-6 rounded-full
-                     bg-gradient-to-r from-rose-500 to-pink-600
-                     shadow-[0_0_80px_rgba(255,105,180,0.9)]
-                     text-xl font-semibold"
-        >
-          Continue Our Forever
-        </Link>
-      </section>
+
+          {/* ================= CINEMATIC VIDEO SECTION ================= */}
+<motion.section
+  initial={{ opacity: 0, y: 100 }}
+  whileInView={{ opacity: 1, y: 0 }}
+  transition={{ duration: 1 }}
+  viewport={{ once: true }}
+  className="py-32 text-center relative overflow-hidden"
+>
+
+  {/* Ambient Glow Background */}
+  <motion.div
+    animate={{ opacity: [0.3, 0.6, 0.3] }}
+    transition={{ repeat: Infinity, duration: 6 }}
+    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+               w-[500px] h-[500px] bg-white/20 blur-[140px] rounded-full -z-10"
+  />
+
+  {/* Animated Title */}
+  <motion.h2
+    initial={{ y: -40, opacity: 0 }}
+    whileInView={{ y: 0, opacity: 1 }}
+    transition={{ duration: 1 }}
+    viewport={{ once: true }}
+    className="text-4xl sm:text-6xl mb-16 text-rose-100"
+  >
+    <motion.span
+      animate={{ y: [0, -6, 0] }}
+      transition={{ repeat: Infinity, duration: 5 }}
+      className="inline-block"
+    >
+      A Special Moment 🎬
+    </motion.span>
+  </motion.h2>
+
+  {/* Video Frame */}
+  <motion.div
+    initial={{ scale: 0.9, rotate: -1 }}
+    whileInView={{ scale: 1, rotate: 0 }}
+    whileHover={{ scale: 1.03 }}
+    transition={{ duration: 0.8 }}
+    viewport={{ once: true }}
+    className="relative max-w-md mx-auto rounded-3xl overflow-hidden
+               shadow-[0_40px_120px_rgba(255,255,255,0.25)]
+               border border-white/30 backdrop-blur-md"
+  >
+
+    {/* Soft Moving Shine Effect */}
+    <motion.div
+      animate={{ x: ["-100%", "100%"] }}
+      transition={{ repeat: Infinity, duration: 6, ease: "linear" }}
+      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+    />
+
+    <div className="aspect-[9/16] bg-black relative">
+      <video
+        controls
+        playsInline
+        className="w-full h-full object-cover relative z-10"
+        onPlay={handleVideoPlay}
+        onPause={handleVideoPause}
+      >
+        <source src="/videos/video1.mp4" type="video/mp4" />
+      </video>
+    </div>
+  </motion.div>
+
+</motion.section>
+
+
+          {/* ROMANTIC MESSAGE */}
+          <section className="py-28 px-6 text-center">
+            <div className="max-w-3xl mx-auto bg-white/10 backdrop-blur-xl rounded-3xl p-10 shadow-xl">
+              <h3 className="text-3xl sm:text-4xl mb-6">
+                You Are My Always
+              </h3>
+
+              <p className="mb-8 text-rose-100">
+                Loving you isn’t just a feeling —
+                it’s the forever I choose every single day.
+              </p>
+
+              <Link
+                to="/forever"
+                className="px-6 py-3 bg-white text-rose-600 rounded-full text-sm font-semibold"
+              >
+                Forever 🤍
+              </Link>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

@@ -11,6 +11,11 @@
   scrollbar-width: none;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+
 * {
   -webkit-font-smoothing: antialiased;
   -webkit-transform: translateZ(0);
