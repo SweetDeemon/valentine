@@ -2,15 +2,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 
-const sectionVariant = {
-  hidden: { opacity: 0, y: 60 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 1.2, ease: "easeOut" },
-  },
-};
-
 export default function Valentine({ audioRef }) {
   const photos = Array.from(
     { length: 10 },
@@ -18,50 +9,90 @@ export default function Valentine({ audioRef }) {
   );
 
   const [activeIndex, setActiveIndex] = useState(0);
-  const [selectedIndex, setSelectedIndex] = useState(null);
+  const [previewIndex, setPreviewIndex] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  const canvasRef = useRef(null);
   const videoRef = useRef(null);
+  const startX = useRef(0);
 
-  /* ===== STABLE GLITTER (NO RE-RENDER LAG) ===== */
-  const glitter = useRef(
-    Array.from({ length: 25 }).map(() => ({
-      top: Math.random() * 100,
-      left: Math.random() * 100,
-      size: 1 + Math.random() * 2,
-      duration: 8 + Math.random() * 4,
-      delay: Math.random() * 6,
-    }))
-  );
-
-  /* AUTO SLIDE */
+  /* ================= CANVAS GLITTER ================= */
   useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % photos.length);
-    }, 6000);
-    return () => clearInterval(interval);
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const particles = Array.from({ length: 70 }).map(() => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      r: Math.random() * 1.5 + 0.5,
+      speed: Math.random() * 0.4 + 0.2,
+      opacity: Math.random() * 0.8 + 0.2,
+    }));
+
+    function animate() {
+      ctx.clearRect(0, 0, width, height);
+
+      particles.forEach((p) => {
+        p.y -= p.speed;
+        if (p.y < 0) p.y = height;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${p.opacity})`;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "white";
+        ctx.fill();
+      });
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+
+    const resize = () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    };
+
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
   }, []);
 
-  /* MUSIC CONTROL */
+  /* ================= AUTO SLIDE ================= */
+  useEffect(() => {
+    if (previewIndex !== null) return; // pause when preview open
+
+    const interval = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % photos.length);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [previewIndex]);
+
+  /* ================= MUSIC ================= */
   const toggleMusic = async () => {
     if (!audioRef?.current) return;
-    const audio = audioRef.current;
 
     if (isPlaying) {
-      audio.pause();
+      audioRef.current.pause();
       setIsPlaying(false);
     } else {
       try {
-        audio.volume = 0.9;
-        await audio.play();
+        await audioRef.current.play();
         setIsPlaying(true);
-      } catch (err) {
-        console.log("User interaction required.");
-      }
+      } catch {}
     }
   };
 
-  /* VIDEO SYNC */
+  /* ================= VIDEO SYNC ================= */
   const handleVideoPlay = () => {
     if (audioRef?.current && isPlaying) {
       audioRef.current.pause();
@@ -74,233 +105,205 @@ export default function Valentine({ audioRef }) {
     }
   };
 
+  /* ================= SWIPE ================= */
+  const handleTouchStart = (e) => {
+    startX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e, isPreview = false) => {
+    const diff = startX.current - e.changedTouches[0].clientX;
+
+    if (Math.abs(diff) < 40) return; // prevent accidental swipe
+
+    if (diff > 0) {
+      isPreview
+        ? setPreviewIndex((prev) =>
+            prev === photos.length - 1 ? 0 : prev + 1
+          )
+        : setActiveIndex((prev) =>
+            prev === photos.length - 1 ? 0 : prev + 1
+          );
+    } else {
+      isPreview
+        ? setPreviewIndex((prev) =>
+            prev === 0 ? photos.length - 1 : prev - 1
+          )
+        : setActiveIndex((prev) =>
+            prev === 0 ? photos.length - 1 : prev - 1
+          );
+    }
+  };
+
   return (
-    <div className="relative min-h-screen overflow-x-hidden text-white">
+    <div className="relative min-h-screen text-white overflow-x-hidden">
 
-      {/* ===== LIGHTWEIGHT BACKGROUND ===== */}
-      <motion.div
-        animate={{ opacity: [0.9, 1, 0.9] }}
-        transition={{ duration: 12, repeat: Infinity }}
-        className="fixed inset-0 -z-50 bg-gradient-to-br from-rose-300 via-pink-400 to-fuchsia-500"
-      />
+      {/* BACKGROUND */}
+      <div className="fixed inset-0 -z-50 bg-gradient-to-br from-rose-300 via-pink-400 to-fuchsia-500" />
+      <canvas ref={canvasRef} className="fixed inset-0 -z-40 pointer-events-none" />
 
-      {/* SOFT LIGHT (REDUCED BLUR FOR IOS) */}
-      <div className="fixed -top-40 -left-40 w-[600px] h-[600px] bg-white/30 blur-[120px] rounded-full -z-40" />
-      <div className="fixed bottom-[-200px] right-[-200px] w-[700px] h-[700px] bg-rose-400/30 blur-[120px] rounded-full -z-40" />
-
-      {/* ===== SMOOTH GLITTER ===== */}
-      {glitter.current.map((p, i) => (
-        <motion.div
-          key={i}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 0.8, 0], y: [0, -10, 0] }}
-          transition={{
-            duration: p.duration,
-            repeat: Infinity,
-            delay: p.delay,
-            ease: "easeInOut",
-          }}
-          className="fixed rounded-full bg-white will-change-transform"
-          style={{
-            width: p.size,
-            height: p.size,
-            top: `${p.top}%`,
-            left: `${p.left}%`,
-            boxShadow: "0 0 6px rgba(255,255,255,0.8)",
-          }}
-        />
-      ))}
-
-      {/* ===== MUSIC BUTTON ===== */}
-      <div className="fixed top-6 right-6 z-50">
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={toggleMusic}
-          className="px-5 py-3 rounded-full bg-white/20 backdrop-blur-md border border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.5)] text-white font-semibold"
-        >
-          {isPlaying ? "Pause 🎵" : "Play 🎵"}
-        </motion.button>
-      </div>
-
-      {/* ===== HERO ===== */}
-      <motion.section
-        variants={sectionVariant}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true }}
-        className="min-h-screen flex flex-col items-center justify-center text-center px-6"
+      {/* MUSIC BUTTON */}
+      <button
+        onClick={toggleMusic}
+        className="fixed top-6 right-6 z-50
+                   w-14 h-14 rounded-full
+                   bg-white/20 backdrop-blur-xl border border-white/40
+                   shadow-[0_0_30px_rgba(255,255,255,0.7)]
+                   flex items-center justify-center text-xl"
       >
-        <h1 className="text-5xl sm:text-8xl font-extrabold bg-gradient-to-r from-white via-pink-100 to-rose-200 bg-clip-text text-transparent drop-shadow-[0_0_40px_rgba(255,255,255,0.8)] will-change-transform">
-          Happy Valentine 💖
+        {isPlaying ? "🎵" : "🎶"}
+      </button>
+
+      {/* HERO */}
+      <section className="min-h-screen flex flex-col items-center justify-center text-center px-6">
+        <h1 className="text-5xl sm:text-8xl font-extrabold
+                       bg-gradient-to-r from-white via-pink-100 to-rose-200
+                       bg-clip-text text-transparent
+                       drop-shadow-[0_0_80px_rgba(255,255,255,0.9)]">
+          Happy Valentine ❤️
         </h1>
 
-        <p className="mt-8 text-lg sm:text-2xl max-w-xl text-white/95">
-          Every moment with you feels like a blooming rose.
+        <p className="mt-8 text-lg sm:text-2xl max-w-xl">
+          With you, every moment feels like magic.
         </p>
-      </motion.section>
+      </section>
 
-      {/* ================= OUR JOURNEY ================= */}
-<motion.section
-  variants={sectionVariant}
-  initial="hidden"
-  whileInView="visible"
-  viewport={{ once: true }}
-  className="py-28 text-center px-6 relative"
->
-  <h2 className="text-4xl sm:text-6xl font-semibold mb-16">
-    Our Journey
-  </h2>
+      {/* OUR JOURNEY */}
+      <section className="py-28 text-center px-6">
+        <h2 className="text-4xl sm:text-6xl font-semibold mb-16">
+          Our Journey
+        </h2>
 
-  {/* MAIN IMAGE */}
-  <div
-    onClick={() => setSelectedIndex(activeIndex)}
-    className="mx-auto max-w-5xl aspect-[16/9] rounded-[40px]
-               overflow-hidden cursor-pointer
-               shadow-[0_40px_140px_rgba(255,105,180,0.5)]"
-  >
-    <AnimatePresence mode="wait">
-      <motion.img
-        key={activeIndex}
-        src={photos[activeIndex]}
-        initial={{ opacity: 0, scale: 1.05 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 1 }}
-        className="w-full h-full object-cover"
-      />
-    </AnimatePresence>
-  </div>
-
-  {/* THUMBNAIL ROW */}
-  <div className="mt-16 flex justify-center">
-    <div className="flex gap-6 overflow-x-auto scroll-smooth px-6 py-4 max-w-5xl">
-      {photos.map((photo, index) => (
-        <motion.div
-          key={index}
-          onClick={() => setActiveIndex(index)}
-          whileHover={{ scale: 1.12 }}
-          whileTap={{ scale: 0.95 }}
-          className={`flex-shrink-0 w-28 h-40 rounded-2xl overflow-hidden
-                      transition-all duration-500 cursor-pointer
-            ${
-              activeIndex === index
-                ? "scale-110 ring-4 ring-white shadow-[0_0_40px_rgba(255,255,255,0.8)]"
-                : "opacity-50 blur-[1px] hover:opacity-100 hover:blur-0"
-            }`}
+        {/* MAIN IMAGE */}
+        <div
+          onClick={() => setPreviewIndex(activeIndex)}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={(e) => handleTouchEnd(e, false)}
+          className="mx-auto max-w-5xl aspect-[16/9]
+                     rounded-[40px] overflow-hidden
+                     shadow-[0_40px_120px_rgba(255,105,180,0.5)]
+                     cursor-pointer"
         >
-          <img src={photo} className="w-full h-full object-cover" />
-        </motion.div>
-      ))}
-    </div>
-  </div>
-</motion.section>
+          <motion.img
+            key={activeIndex}
+            src={photos[activeIndex]}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6 }}
+            className="w-full h-full object-cover"
+          />
+        </div>
 
+        {/* MINI THUMBNAILS */}
+        <div className="mt-12 flex justify-center">
+          <div className="flex gap-4 overflow-x-auto px-4 py-2">
+            {photos.map((photo, index) => (
+              <div
+                key={index}
+                onClick={() => setActiveIndex(index)}
+                className={`w-20 h-28 rounded-xl overflow-hidden cursor-pointer
+                ${
+                  activeIndex === index
+                    ? "ring-4 ring-white scale-105"
+                    : "opacity-60"
+                }`}
+              >
+                <img src={photo} className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      {/* ===== VIDEO OPTIMIZED ===== */}
-      <motion.section
-        variants={sectionVariant}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true }}
-        className="py-32 text-center px-6"
-      >
+      {/* VIDEO */}
+      <section className="py-32 text-center px-6">
         <h2 className="text-4xl sm:text-6xl font-semibold mb-14">
           A Special Moment 🎥
         </h2>
 
-        <div className="max-w-md mx-auto rounded-3xl overflow-hidden shadow-[0_40px_100px_rgba(255,105,180,0.5)] backdrop-blur-md border border-white/30">
+        <div className="relative max-w-md mx-auto rounded-3xl overflow-hidden
+                        shadow-[0_50px_150px_rgba(255,105,180,0.6)]
+                        backdrop-blur-xl border border-white/30">
           <div className="aspect-[9/16] bg-black">
             <video
               ref={videoRef}
               controls
               playsInline
-              preload="metadata"
               className="w-full h-full object-cover"
-              style={{ transform: "translateZ(0)" }}
               onPlay={handleVideoPlay}
               onPause={handleVideoPause}
-              onEnded={handleVideoPause}
             >
               <source src="/videos/video1.mp4" type="video/mp4" />
             </video>
           </div>
         </div>
-      </motion.section>
+      </section>
 
-      {/* ================= ROMANTIC MESSAGE ================= */}
-<motion.section
-  variants={sectionVariant}
-  initial="hidden"
-  whileInView="visible"
-  viewport={{ once: true }}
-  className="py-28 px-6 text-center relative z-10"
->
-  <div className="absolute inset-0 -z-10 
-                  bg-gradient-to-t from-white/20 via-transparent to-white/10
-                  blur-3xl" />
-
-  <div className="max-w-3xl mx-auto">
-    <h3 className="text-3xl sm:text-5xl font-semibold 
-                   bg-gradient-to-r from-white via-pink-100 to-rose-200
-                   bg-clip-text text-transparent
-                   drop-shadow-[0_0_40px_rgba(255,255,255,0.8)]">
-      You Are My Favorite Place.
-    </h3>
-
-    <p className="mt-10 text-lg sm:text-xl leading-relaxed text-white/95">
-      In a world full of fleeting moments,
-      you are the one that stays.
-      <br /><br />
-      Every laugh we share,
-      every silence we understand,
-      every heartbeat that grows closer —
-      is proof that love can bloom forever.
-      <br /><br />
-      And if I had to choose again,
-      in every lifetime —
-      I would still choose you.
-    </p>
-  </div>
-</motion.section>
-
-
-      {/* ===== CTA ===== */}
-      <motion.section
-        variants={sectionVariant}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true }}
-        className="py-24 text-center"
-      >
-        <Link
-          to="/forever"
-          className="px-16 py-5 rounded-full bg-gradient-to-r from-rose-500 to-pink-600 shadow-[0_0_60px_rgba(255,105,180,0.8)] text-lg font-semibold"
-        >
-          Continue Our Forever 💍
-        </Link>
-      </motion.section>
-
-      {/* ===== MODAL ===== */}
+      {/* PREVIEW */}
       <AnimatePresence>
-        {selectedIndex !== null && (
+        {previewIndex !== null && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-50"
-            onClick={() => setSelectedIndex(null)}
+            className="fixed inset-0 bg-black/95 flex items-center justify-center z-50"
+            onClick={() => setPreviewIndex(null)}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={(e) => handleTouchEnd(e, true)}
           >
             <motion.img
-              src={photos[selectedIndex]}
-              className="max-h-[90vh] max-w-[90vw] rounded-3xl"
+              key={previewIndex}
+              src={photos[previewIndex]}
               initial={{ scale: 0.9 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.9 }}
+              transition={{ duration: 0.4 }}
+              className="max-h-[95vh] max-w-[95vw] object-contain"
+              onClick={(e) => e.stopPropagation()}
             />
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ROMANTIC MESSAGE */}
+      <section className="py-32 px-6 text-center">
+        <div className="max-w-3xl mx-auto">
+          <h3
+            className="text-3xl sm:text-5xl font-semibold
+                       bg-gradient-to-r from-white via-pink-100 to-rose-200
+                       bg-clip-text text-transparent"
+            style={{ fontFamily: "'Playfair Display', serif" }}
+          >
+            You Are My Forever.
+          </h3>
+
+          <p
+            className="mt-12 text-lg sm:text-xl leading-relaxed"
+            style={{ fontFamily: "'Playfair Display', serif" }}
+          >
+            In your presence, time feels softer.
+            The world quiets, and my heart finds its rhythm.
+            <br /><br />
+            Love with you is not loud —
+            it is steady, gentle, and endlessly certain.
+            <br /><br />
+            And in every lifetime,
+            my heart will always return to you.
+          </p>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-20 text-center">
+        <Link
+          to="/forever"
+          className="px-20 py-6 rounded-full
+                     bg-gradient-to-r from-rose-500 to-pink-600
+                     shadow-[0_0_100px_rgba(255,105,180,0.9)]
+                     text-xl font-semibold"
+        >
+          Continue Our Forever 💍
+        </Link>
+      </section>
 
     </div>
   );
