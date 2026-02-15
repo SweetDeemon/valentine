@@ -140,38 +140,62 @@ export default function Valentine({ audioRef }) {
         </p>
       </motion.section>
 
-      {/* ===== OUR JOURNEY ===== */}
-      <motion.section
-        variants={sectionVariant}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true }}
-        className="py-28 text-center px-6"
-      >
-        <h2 className="text-4xl sm:text-6xl font-semibold mb-14">
-          Our Journey
-        </h2>
+      {/* ================= OUR JOURNEY ================= */}
+<motion.section
+  variants={sectionVariant}
+  initial="hidden"
+  whileInView="visible"
+  viewport={{ once: true }}
+  className="py-28 text-center px-6 relative"
+>
+  <h2 className="text-4xl sm:text-6xl font-semibold mb-16">
+    Our Journey
+  </h2>
 
-        <div
-          onClick={() => setSelectedIndex(activeIndex)}
-          className="mx-auto max-w-4xl aspect-[16/9] rounded-3xl overflow-hidden shadow-[0_30px_80px_rgba(255,105,180,0.5)] cursor-pointer"
+  {/* MAIN IMAGE */}
+  <div
+    onClick={() => setSelectedIndex(activeIndex)}
+    className="mx-auto max-w-5xl aspect-[16/9] rounded-[40px]
+               overflow-hidden cursor-pointer
+               shadow-[0_40px_140px_rgba(255,105,180,0.5)]"
+  >
+    <AnimatePresence mode="wait">
+      <motion.img
+        key={activeIndex}
+        src={photos[activeIndex]}
+        initial={{ opacity: 0, scale: 1.05 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 1 }}
+        className="w-full h-full object-cover"
+      />
+    </AnimatePresence>
+  </div>
+
+  {/* THUMBNAIL ROW */}
+  <div className="mt-16 flex justify-center">
+    <div className="flex gap-6 overflow-x-auto scroll-smooth px-6 py-4 max-w-5xl">
+      {photos.map((photo, index) => (
+        <motion.div
+          key={index}
+          onClick={() => setActiveIndex(index)}
+          whileHover={{ scale: 1.12 }}
+          whileTap={{ scale: 0.95 }}
+          className={`flex-shrink-0 w-28 h-40 rounded-2xl overflow-hidden
+                      transition-all duration-500 cursor-pointer
+            ${
+              activeIndex === index
+                ? "scale-110 ring-4 ring-white shadow-[0_0_40px_rgba(255,255,255,0.8)]"
+                : "opacity-50 blur-[1px] hover:opacity-100 hover:blur-0"
+            }`}
         >
-          <AnimatePresence mode="wait">
-            <motion.img
-              key={activeIndex}
-              src={photos[activeIndex]}
-              loading="lazy"
-              decoding="async"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.8 }}
-              className="w-full h-full object-cover"
-              style={{ backfaceVisibility: "hidden" }}
-            />
-          </AnimatePresence>
-        </div>
-      </motion.section>
+          <img src={photo} className="w-full h-full object-cover" />
+        </motion.div>
+      ))}
+    </div>
+  </div>
+</motion.section>
+
 
       {/* ===== VIDEO OPTIMIZED ===== */}
       <motion.section
@@ -203,6 +227,43 @@ export default function Valentine({ audioRef }) {
           </div>
         </div>
       </motion.section>
+
+      {/* ================= ROMANTIC MESSAGE ================= */}
+<motion.section
+  variants={sectionVariant}
+  initial="hidden"
+  whileInView="visible"
+  viewport={{ once: true }}
+  className="py-28 px-6 text-center relative z-10"
+>
+  <div className="absolute inset-0 -z-10 
+                  bg-gradient-to-t from-white/20 via-transparent to-white/10
+                  blur-3xl" />
+
+  <div className="max-w-3xl mx-auto">
+    <h3 className="text-3xl sm:text-5xl font-semibold 
+                   bg-gradient-to-r from-white via-pink-100 to-rose-200
+                   bg-clip-text text-transparent
+                   drop-shadow-[0_0_40px_rgba(255,255,255,0.8)]">
+      You Are My Favorite Place.
+    </h3>
+
+    <p className="mt-10 text-lg sm:text-xl leading-relaxed text-white/95">
+      In a world full of fleeting moments,
+      you are the one that stays.
+      <br /><br />
+      Every laugh we share,
+      every silence we understand,
+      every heartbeat that grows closer —
+      is proof that love can bloom forever.
+      <br /><br />
+      And if I had to choose again,
+      in every lifetime —
+      I would still choose you.
+    </p>
+  </div>
+</motion.section>
+
 
       {/* ===== CTA ===== */}
       <motion.section
